@@ -1,6 +1,5 @@
 FROM php:8.1-apache
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -12,19 +11,15 @@ RUN apt-get update && apt-get install -y \
     libldap2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
 RUN docker-php-ext-install -j$(nproc) \
     mysqli \
     pdo_mysql
 
-# MySQLi compatibility
 RUN echo "mysqli.report_mode=0" \
     > /usr/local/etc/php/conf.d/mysqli-compat.ini
 
-# Apache configuration
 RUN a2enmod rewrite
 
-# TestLink directories
 RUN mkdir -p /var/testlink/logs \
     /var/testlink/upload_area \
     && chown -R www-data:www-data /var/testlink \
@@ -32,44 +27,31 @@ RUN mkdir -p /var/testlink/logs \
 
 WORKDIR /var/www/html
 
-# Download TestLink
 RUN git clone --depth 1 \
     --branch testlink_1_9_20_fixed \
     https://github.com/TestLinkOpenSourceTRMS/testlink-code.git temp \
     && cp -a temp/. . \
     && rm -rf temp
 
-# Patch installer for managed MySQL databases
-RUN cat > /tmp/patch.php <<'PHP'
-<?php
+# Adaptar instalador para Clever Cloud
+RUN python3 - <<'PY'
+from pathlib import Path
 
-$file = '/var/www/html/install/installNewDB.php';
+p = Path("/var/www/html/install/installNewDB.php")
+s = p.read_text()
 
-$code = file_get_contents($file);
+start = s.find("$user_host = explode(")
+end = s.find("// Schema Operations", start)
 
-$start = strpos(
-    $code,
-    "$user_host = explode('@',$tl_db_login);"
-);
+if start < 0 or end < 0:
+    raise SystemExit("No se ha podido adaptar el instalador")
 
-$end = strpos(
-    $code,
-    "// Schema Operations (CREATE, ALTER, ecc).",
-    $start
-);
-
-if ($start === false || $end === false) {
-    fwrite(STDERR, "ERROR: TestLink installer patch location not found.\n");
-    exit(1);
-}
-
-$replacement = <<<'CODE'
+replacement = """
 $user_host = explode('@', $tl_db_login);
 
 if ($db_type == 'mysql') {
-    echo "<br /><b>Using existing MySQL user `"
-       . htmlspecialchars($user_host[0])
-       . "`:</b><span class='ok'>OK!</span>";
+    echo "<br /><b>Using existing MySQL user:</b>";
+    echo "<span class='ok'>OK!</span>";
 } else {
     $msg = create_user_for_db(
         $dbDriverName,
@@ -81,9 +63,7 @@ if ($db_type == 'mysql') {
         $tl_db_passwd
     );
 
-    echo "<br /><b>Creating Testlink DB user `"
-       . htmlspecialchars($user_host[0])
-       . "`:</b>";
+    echo "<br /><b>Creating Testlink DB user:</b>";
 
     if (strpos($msg, 'ok -') === FALSE) {
         echo "<span class='notok'>Failed!</span>";
@@ -93,29 +73,12 @@ if ($db_type == 'mysql') {
     }
 }
 
-// ------------------------------------------------------------------------
-// Schema Operations (CREATE, ALTER, ecc).
-CODE;
+"""
 
-$code = substr_replace(
-    $code,
-    $replacement,
-    $start,
-    $end - $start + strlen("// Schema Operations (CREATE, ALTER, ecc).")
-);
+p.write_text(s[:start] + replacement + s[end:])
+print("Instalador adaptado correctamente")
+PY
 
-if (file_put_contents($file, $code) === false) {
-    fwrite(STDERR, "ERROR: Could not write installer patch.\n");
-    exit(1);
-}
-
-echo "TestLink MySQL installer patch applied successfully.\n";
-PHP
-
-RUN php /tmp/patch.php \
-    && rm /tmp/patch.php
-
-# Permissions
 RUN chown -R www-data:www-data /var/www/html
 
 EXPOSE 80
