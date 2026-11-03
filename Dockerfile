@@ -1,4 +1,4 @@
-FROM php:7.4-apache
+FROM php:8.1-apache
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -17,9 +17,10 @@ RUN mkdir -p /var/testlink/logs \
 
 WORKDIR /var/www/html
 
-RUN git clone https://github.com/TestLinkOpenSourceTRMS/testlink-code.git temp \
-    && cp -R temp/* . \
-    && rm -rf temp
+RUN wget -O testlink.zip https://github.com/TestLinkOpenSourceTRMS/testlink-code/archive/refs/tags/1.9.20-20251208.zip \
+    && unzip testlink.zip \
+    && cp -a testlink-code-1.9.20-20251208/. . \
+    && rm -rf testlink.zip testlink-code-1.9.20-20251208
 
 RUN chown -R www-data:www-data /var/www/html
 
