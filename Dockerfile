@@ -2,6 +2,7 @@ FROM php:8.1-apache
 
 RUN apt-get update && apt-get install -y \
     git \
+    wget \
     unzip \
     libpng-dev \
     libjpeg62-turbo-dev \
@@ -17,10 +18,9 @@ RUN mkdir -p /var/testlink/logs \
 
 WORKDIR /var/www/html
 
-RUN wget -O testlink.zip https://github.com/TestLinkOpenSourceTRMS/testlink-code/archive/refs/tags/1.9.20-20251208.zip \
-    && unzip testlink.zip \
-    && cp -a testlink-code-1.9.20-20251208/. . \
-    && rm -rf testlink.zip testlink-code-1.9.20-20251208
+RUN git clone --branch testlink_1_9_20_fixed https://github.com/TestLinkOpenSourceTRMS/testlink-code.git temp \
+    && cp -a temp/. . \
+    && rm -rf temp
 
 RUN chown -R www-data:www-data /var/www/html
 
